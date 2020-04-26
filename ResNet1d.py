@@ -15,7 +15,7 @@ from torch.nn import  ModuleList ,BatchNorm1d,Sequential,\
 import xgboost as xgb
 #import torch.nn.SyncBatchNorm as BatchNorm1d 
 from torch.nn import   ReLU,Dropout
-from hyperopt import hp,tpe,Trials,fmin,STATUS_OK#pip install hyperopt --user
+#from hyperopt import hp,tpe,Trials,fmin,STATUS_OK#pip install hyperopt --user
 import torch.nn as nn
 
 '''
@@ -34,6 +34,9 @@ m3(x).size()
 m4=ReduceModule(4)
 y=torch.ones(5,30,4,12)
 m4(x).size()
+
+m5=CnnDnn()
+m5(y).size()
 '''
 
 class GELU(nn.Module):
@@ -277,8 +280,8 @@ class CnnModule(torch.nn.Module):
 
 
 class CnnDnn(torch.nn.Module):
-    def __init__(self, in_channel,out_channel,cnn_ker,cnn_stride,\
-            pool_stride,pool_ker,custom,bn,dnn):
+    def __init__(self, in_channel=4,out_channel=4,cnn_ker=3,cnn_stride=1,\
+            pool_stride=2,pool_ker=3,custom=False,bn=1,dnn=[30,1]):
         super(CnnDnn, self).__init__()
         mylist=ModuleList()
         if ~isinstance(cnn_ker,list):
@@ -295,12 +298,12 @@ class CnnDnn(torch.nn.Module):
         if ~custom:
             mylist.append(\
             ReduceModule(out_channel,mean=~custom))
-            mylist=Sequential(*mylist)
+        self.mylist=Sequential(*mylist)
         self.fullyconnected=Fc(encoder_hidden_size=dnn, bn=bn,dr_p=0)
     
     def forward(self,x):
-        torch.stack( [ self.mylist(x[:,i,:,:]) for i in x.dim()[1] ] ,dim=1)
-1=1
+        y=torch.stack( [ self.mylist(x[:,i,:,:]) for i in range(x.size()[1]) ] ,dim=1)
+        return self.fullyconnected(y)
 
 class ReduceModule(torch.nn.Module):
     def __init__(self, in_channel,mean=False):
@@ -312,11 +315,11 @@ class ReduceModule(torch.nn.Module):
         self.pool=AdaptiveAvgPool1d(1)
          
     def forward(self,x):
-        #x=n,bin,c,l
+        #x=n,c,l
         x=self.pool(x) 
         x=x.transpose(-1,-2)
         x=self.linear(x) 
-        return x.squeeze(-1).squeeze(-1)#n,bin,1
+        return x.squeeze(-1).squeeze(-1)#n
 
 
 
