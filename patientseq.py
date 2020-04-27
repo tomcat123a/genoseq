@@ -77,8 +77,9 @@ def fit(model,data_x,data_y,val_x,val_y,test_x,test_y,lr=0.001,maxepochs=100,\
         model=model.train().to(device)
     else:
         print('eval mode')
-        model=model.eval()
+        model=model.eval().to(device)
     val_x,val_y=val_x.to(device),val_y.to(device)
+    test_x,test_y=test_x.to(device),test_y.to(device)
     for i in range( maxepochs):
         optimizer.zero_grad()
         x,y=data_x.to(device),data_y.to(device)
