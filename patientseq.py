@@ -50,13 +50,14 @@ def load_expression(tissue=2,exp_folder='/scratch/deepnet/dna/full_expr/',\
         #exp_table=pd.read_csv('C:/tmp/NORM_RM.txt',index_col=0,sep='\t') 
 
     return exp_table
-def split_train_test(d,exp_row,train_percent=0.8,seed=2):
+def split_train_val_test(d,exp_row,train_percent=0.8,seed=2):
     np.random.seed(seed)
     n=d.shape[1]
     perm_idx=np.random.permutation(n)
     train_idx=perm_idx[:int(n*train_percent)]
-    test_idx=perm_idx[int(n*train_percent):]
-    return d.iloc[:,train_idx],exp_row.iloc[train_idx],\
+    val_idx=perm_idx[int(n*train_percent):int(n*train_percent)+int(n*(1-train_percent)*0.5)]
+    test_idx=perm_idx[int(n*train_percent)+int(n*(1-train_percent)*0.5):]
+    return d.iloc[:,train_idx],exp_row.iloc[train_idx],d.iloc[:,val_idx],exp_row.iloc[val_idx],\
         d.iloc[:,test_idx],exp_row.iloc[test_idx]
         
 def encode_from_seq(d):
@@ -66,17 +67,18 @@ def encode_from_seq(d):
   for row in range(d.shape[0])],dim=0).unsqueeze(0) \
    for i in range(d.shape[1])],dim=0)
     
-def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
+def fit(model,data_x,data_y,val_x,val_y,test_x,test_y,lr=0.001,maxepochs=100,\
    device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),debug=1):
     optimizer=torch.optim.Adam(model.parameters(), lr=lr,amsgrad=True)
-    loss_list=[]
-    cor_list=[]
+    val_cor_list=[]
+    test_cor_list=[]
     if maxepochs>1:
         print('training mode')
         model=model.train().to(device)
     else:
         print('eval mode')
         model=model.eval()
+    val_x,val_y=val_x.to(device),val_y.to(device)
     for i in range( maxepochs):
         optimizer.zero_grad()
         x,y=data_x.to(device),data_y.to(device)
@@ -87,16 +89,27 @@ def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
         loss =MSELoss(reduction='mean')(ypred,y)
         loss.backward()
         optimizer.step() 
-        loss_list.append(loss.cpu().data.item())
-        cor_list.append(cor(y.cpu().data.numpy(),ypred.cpu().data.numpy())[0]) 
+        model=model.eval()
+        val_ypred=model(val_x)
+        if val_ypred.dim()==2:
+            val_ypred=val_ypred.squeeze(1)
+        test_ypred=model(test_x)
+        if test_ypred.dim()==2:
+            test_ypred=test_ypred.squeeze(1)
+        val_cor_list.append( cor(val_y.cpu().data.numpy(),val_ypred.cpu().data.numpy())[0] )
+        
+        test_cor_list.append( cor(test_y.cpu().data.numpy(),test_ypred.cpu().data.numpy())[0] ) 
+        model=model.train()
         if debug==1 and maxepochs>1:
-            print({'loss':loss_list[-1],'cor':cor_list[-1]})
+            print({'val_cor':val_cor_list[-1],'test_cor':test_cor_list[-1]})
          
-        if len(loss_list)>5 \
-        and abs(loss_list[-2]/loss_list[-1]-1)<0.0001  :
+        if len(val_cor_list)>5 and val_cor_list[-1]>0 and val_cor_list>0  \
+        and val_cor_list[-2]>val_cor_list[-1] and val_cor_list[-3]>val_cor_list[-2]  :
+            print('converged!')
             break
     print('finally')
-    print(loss_list[-1],cor_list[-1])
+    print(val_cor_list[-1],test_cor_list[-1])
+    return val_cor_list[-1],test_cor_list[-1]
 
 def cv(data_x,data_y):
     kf=KFold(n_splits=5, random_state=None, shuffle=False)
