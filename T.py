@@ -53,7 +53,8 @@ train_x=encode_from_seq(train_x)
 test_x=encode_from_seq(test_x)
 train_y=torch.from_numpy( train_y.values.astype(np.float32) ) 
 test_y=torch.from_numpy( test_y.values.astype(np.float32) ) 
-fit(m5,train_x,train_y,maxepochs=3)
+fit(m5,train_x,train_y,maxepochs=100)
+print('eval starts')
 fit(m5,test_x,test_y,maxepochs=1)
 
  

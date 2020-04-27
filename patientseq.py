@@ -72,8 +72,10 @@ def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
     loss_list=[]
     cor_list=[]
     if maxepochs>1:
+        print('training mode')
         model=model.train().to(device)
     else:
+        print('eval mode')
         model=model.eval()
     for i in range( maxepochs):
         optimizer.zero_grad()
@@ -85,7 +87,7 @@ def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
         loss =MSELoss(reduction='mean')(ypred,y)
         loss.backward()
         optimizer.step() 
-        loss_list.append(loss.cpu().data.numpy())
+        loss_list.append(loss.cpu().data.item())
         cor_list.append(cor(y.cpu().data.numpy(),ypred.cpu().data.numpy())[0]) 
         if debug==1 and maxepochs>1:
             print({'loss':loss_list[-1],'cor':cor_list[-1]})
@@ -93,6 +95,7 @@ def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
         if len(loss_list)>5 \
         and abs(loss_list[-2]/loss_list[-1]-1)<0.0001  :
             break
+    print('finally')
     print(loss_list[-1],cor_list[-1])
 
 def cv(data_x,data_y):
