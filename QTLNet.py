@@ -12,6 +12,7 @@ from hyperopt import hp,tpe,Trials,fmin,STATUS_OK#pip install hyperopt --user
 from torch.nn import Sequential ,MSELoss
 import torch
 from sklearn.model_selection import KFold
+import numpy as np
 class QTLNet():
     def __init__(loader=None):
         self.seed=seed
@@ -137,6 +138,43 @@ class Loader():
         
 from hyperopt import hp,tpe,Trials,fmin,STATUS_OK
 
+       
+IUPAC_DICT = {
+  'A' : torch.tensor([1, 0, 0, 0], dtype = torch.float32),
+  'T' : torch.tensor([0, 1, 0, 0], dtype = torch.float32),
+  'C' : torch.tensor([0, 0, 1, 0], dtype = torch.float32),
+  'G' : torch.tensor([0, 0, 0, 1], dtype = torch.float32),
+  '-' : torch.tensor([0, 0, 0, 0], dtype = torch.float32),
+  '.' : torch.tensor([0, 0, 0, 0], dtype = torch.float32),
+  'N' : torch.tensor([0.25, 0.25, 0.25, 0.25], dtype = torch.float32),
+  'R' : torch.tensor([0.50, 0, 0, 0.50], dtype = torch.float32),
+  'Y' : torch.tensor([0, 0.50, 0.50, 0], dtype = torch.float32),
+  'S' : torch.tensor([0, 0, 0.50, 0.50], dtype = torch.float32),
+  'W' : torch.tensor([0.50, 0.50, 0, 0], dtype = torch.float32),
+  'K' : torch.tensor([0, 0.50, 0, 0.50], dtype = torch.float32),
+  'M' : torch.tensor([0.50, 0, 0.50, 0], dtype = torch.float32),
+  'B' : torch.tensor([0, 0.33, 0.33, 0.33], dtype = torch.float32),
+  'D' : torch.tensor([0.33, 0.33, 0, 0.33], dtype = torch.float32),
+  'H' : torch.tensor([0.33, 0.33, 0.33, 0], dtype = torch.float32),
+  'V' : torch.tensor([0.33, 0, 0.33, 0.33], dtype = torch.float32)
+}
+
+ 
+def encodeSeqs(s, inputsize = 2000): 
+    ''' Convert sequence to 0-1 encoding, forward and reverse complement sequence
+    '''
+     
+    s=np.array(s[: inputsize ])
+     
+    codes = np.zeros((4, inputsize))
+     
+    for k, v in IUPAC_DICT.items(): 
         
-        
+        ix = np.where(s == k)[0]
+        #ix = np.where(k == s)[0]
+        if (len(ix) > 0): 
+            codes[:, ix] = torch.unsqueeze(v, 1).expand(4, len(ix))
+             
+    return codes.astype("float32") 
+      
     

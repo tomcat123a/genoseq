@@ -14,6 +14,7 @@ import torch
 import pyfasta
 from torch.nn import Conv1d, ModuleList ,BatchNorm1d,Sequential,\
 AdaptiveAvgPool1d,Linear,MSELoss,LSTM,GRU,MaxPool1d,AdaptiveMaxPool1d,AvgPool1d
+from scipy.stats import pearsonr as cor
 import time
 
 def load_df(file_name):
@@ -23,15 +24,16 @@ def load_df(file_name):
     return d
 
 def split_train_test(d,train_percent=0.8):
-    n=d.shape[0]
+    n=d.shape[1]
     perm_idx=np.random.permutation(n)
     train_idx=perm_idx[:int(n*train_percent)]
     test_idx=perm_idx[int(n*train_percent):]
-    return d.iloc[train_idx],d.iloc[test_idx]
+    return d.iloc[:,train_idx],d.iloc[:,test_idx]
 def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
-   device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')):
+   device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),debug=1):
     optimizer=torch.optim.Adam(model.parameters(), lr=lr,amsgrad=True)
     loss_list=[]
+    cor_list=[]
     model=model.train().to(device)
     for i in range( maxepochs):
         optimizer.zero_grad()
@@ -44,10 +46,14 @@ def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
         loss.backward()
         optimizer.step() 
         loss_list=loss_list.append(loss.cpu().data.numpy())
-                
+        cor_list=cor_list.append(cor(y.cpu().data.numpy(),ypred.cpu().data.numpy())[0]) 
+        if debug==1 and maxepochs>1:
+            print(loss_list[-1],cor_list[-1])
+        scipy.stats.spearmanr()
         if len(loss_list)>5 \
         and abs(loss_list[-2]/loss_list[-1]-1)<0.0001  :
             break
+    print(loss_list[-1],cor_list[-1])
 
 def cv(data_x,data_y):
     kf=KFold(n_splits=5, random_state=None, shuffle=False)
@@ -71,6 +77,7 @@ def Eval_single_gene(folder=\
         print(train_d.shape)
         print(test_d.shape)
         print(test_d)
+        print(len(test_d.iloc[0,0]))
     return test_error
     
 
