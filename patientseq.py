@@ -16,25 +16,65 @@ from torch.nn import Conv1d, ModuleList ,BatchNorm1d,Sequential,\
 AdaptiveAvgPool1d,Linear,MSELoss,LSTM,GRU,MaxPool1d,AdaptiveMaxPool1d,AvgPool1d
 from scipy.stats import pearsonr as cor
 import time
-
+from QTLNet import encodeSeqs
 def load_df(file_name):
     pickle_file=open(file_name,'rb')
     d=pickle.load(pickle_file)
     pickle_file.close()
     return d
 
-def split_train_test(d,train_percent=0.8):
+def load_expression(tissue=2,exp_folder='/scratch/deepnet/dna/full_expr/',\
+                    chrom=list(range(1,23)),process_type='norm_rm'):
+    TISSUE=['Breast_Mammary_Tissue','Muscle_Skeletal','Ovary','Whole_Blood',\
+                'Adipose_Subcutaneous','Brain_Hippocampus','Esophagus_Mucosa','Prostate','Adipose_Visceral_Omentum','Brain_Hypothalamus'\
+                ,'Skin_Not_Sun_Exposed_Suprapubic','Esophagus_Muscularis','Adrenal_Gland','Brain_Nucleus_accumbens_basal_ganglia','Fallopian_Tube',\
+                'Skin_Sun_Exposed_Lower_leg','Artery_Aorta','Brain_Putamen_basal_ganglia','Heart_Atrial_Appendage','Small_Intestine_Terminal_Ileum',\
+                'Artery_Coronary','Brain_Spinal_cord_cervical_c-1','Heart_Left_Ventricle','Spleen','Artery_Tibial','Brain_Substantia_nigra',\
+                'Kidney_Cortex','Stomach','Bladder','Liver','Testis',\
+                'Brain_Amygdala','Cells_EBV-transformed_lymphocytes','Lung','Thyroid','Brain_Anterior_cingulate_cortex_BA24','Cells_Transformed_fibroblasts',\
+                'Minor_Salivary_Gland','Uterus','Brain_Caudate_basal_ganglia','Cervix_Ectocervix','Muscle_Skeletal','Vagina',\
+                'Brain_Cerebellar_Hemisphere','Cervix_Endocervix','Nerve_Tibial','Brain_Cerebellum','Colon_Sigmoid','Brain_Cortex','Pancreas',\
+                'Colon_Transverse','Brain_Frontal_Cortex_BA9','Esophagus_Gastroesophageal_Junction','Pituitary']
+        
+    exp_folder_dir_list=[]
+    for j in chrom:
+        #EXP_FOLDER= exp_folder+self.TISSUE[tissue]+'/chr{}_RAW.csv'.format(j) in avg
+        EXP_FOLDER= exp_folder+'chr{}/exp_nor_rbe/'.format(j)+TISSUE[tissue]+\
+    '/NORM_RM.txt'if process_type=='norm_rm' else '/RAW.txt' #in avg_0
+        exp_folder_dir_list.append(EXP_FOLDER)
+    if os.name!='nt':#combine chrs of expression,
+        exp_table=pd.concat([ pd.read_csv(exp_folder_dir_list[j],index_col=0,sep='\t',engine='python') for j in range(len(chrom))])
+    else:
+        exp_table=pd.concat([ pd.read_csv(exp_folder_dir_list[j],index_col=0,sep='\t',engine='python') for j in range(len(chrom))])
+    
+        #exp_table=pd.read_csv('C:/tmp/NORM_RM.txt',index_col=0,sep='\t') 
+
+    return exp_table
+def split_train_test(d,exp_row,train_percent=0.8,seed=2):
+    np.random.seed(seed)
     n=d.shape[1]
     perm_idx=np.random.permutation(n)
     train_idx=perm_idx[:int(n*train_percent)]
     test_idx=perm_idx[int(n*train_percent):]
-    return d.iloc[:,train_idx],d.iloc[:,test_idx]
+    return d.iloc[:,train_idx],exp_row.iloc[train_idx],\
+        d.iloc[:,test_idx],exp_row.iloc[test_idx]
+        
+def encode_from_seq(d):
+    #encode 'ATCG' seq list to N,n_bins,C,L
+    return torch.cat( [torch.stack(\
+   [torch.from_numpy(encodeSeqs(list(d.iloc[row,i]))) \
+  for row in range(d.shape[0])],dim=0).unsqueeze(0) \
+   for i in range(d.shape[1])],dim=0)
+    
 def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
    device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),debug=1):
     optimizer=torch.optim.Adam(model.parameters(), lr=lr,amsgrad=True)
     loss_list=[]
     cor_list=[]
-    model=model.train().to(device)
+    if maxepochs>1:
+        model=model.train().to(device)
+    else:
+        model=model.eval()
     for i in range( maxepochs):
         optimizer.zero_grad()
         x,y=data_x.to(device),data_y.to(device)
@@ -45,11 +85,11 @@ def fit(model,data_x,data_y,lr=0.001,maxepochs=100,\
         loss =MSELoss(reduction='mean')(ypred,y)
         loss.backward()
         optimizer.step() 
-        loss_list=loss_list.append(loss.cpu().data.numpy())
-        cor_list=cor_list.append(cor(y.cpu().data.numpy(),ypred.cpu().data.numpy())[0]) 
+        loss_list.append(loss.cpu().data.numpy())
+        cor_list.append(cor(y.cpu().data.numpy(),ypred.cpu().data.numpy())[0]) 
         if debug==1 and maxepochs>1:
-            print(loss_list[-1],cor_list[-1])
-        scipy.stats.spearmanr()
+            print({'loss':loss_list[-1],'cor':cor_list[-1]})
+         
         if len(loss_list)>5 \
         and abs(loss_list[-2]/loss_list[-1]-1)<0.0001  :
             break

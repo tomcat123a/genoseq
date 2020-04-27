@@ -284,20 +284,23 @@ class CnnDnn(torch.nn.Module):
             pool_stride=2,pool_ker=3,custom=False,bn=1,dnn=[30,1]):
         super(CnnDnn, self).__init__()
         mylist=ModuleList()
-        if ~isinstance(cnn_ker,list):
+        
+        if isinstance(cnn_ker,list)==False:
             mylist.append(CnnModule(in_channel=in_channel,\
         out_channel=out_channel,cnn_ker=cnn_ker,cnn_stride=cnn_stride,\
             pool_stride=pool_stride,pool_ker=pool_ker,bn=1))
         else:
-            for i in len(cnn_ker):
+            
+            for i in range(len(cnn_ker)):
                 mylist.append(CnnModule(\
   in_channel=in_channel[i],\
         out_channel=out_channel[i],cnn_ker=cnn_ker[i],\
   cnn_stride=cnn_stride[i],\
-            pool_stride=pool_stride[i],pool_ker=pool_ker[i],bn=bn[0]))
+            pool_stride=pool_stride[i],pool_ker=pool_ker[i],bn=bn))
         if ~custom:
             mylist.append(\
-            ReduceModule(out_channel,mean=~custom))
+            ReduceModule(out_channel if \
+    ~isinstance(out_channel,list) else out_channel[-1],mean=~custom))
         self.mylist=Sequential(*mylist)
         self.fullyconnected=Fc(encoder_hidden_size=dnn, bn=bn,dr_p=0)
     
