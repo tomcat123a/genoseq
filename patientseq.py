@@ -37,10 +37,19 @@ def load_expression(tissue=2,exp_folder='/scratch/deepnet/dna/full_expr/',\
                 'Colon_Transverse','Brain_Frontal_Cortex_BA9','Esophagus_Gastroesophageal_Junction','Pituitary']
         
     exp_folder_dir_list=[]
+    assert process_type in ['norm_rm','raw','unnorm_rm']
     for j in chrom:
         #EXP_FOLDER= exp_folder+self.TISSUE[tissue]+'/chr{}_RAW.csv'.format(j) in avg
-        EXP_FOLDER= exp_folder+'chr{}/exp_nor_rbe/'.format(j)+TISSUE[tissue]+\
-    '/NORM_RM.txt'if process_type=='norm_rm' else '/RAW.txt' #in avg_0
+        if process_type=='norm_rm':
+            txt_file_post='/NORM_RM.txt'
+            EXP_FOLDER= exp_folder+'chr{}/exp_nor_rbe/'.format(j)+TISSUE[tissue]+txt_file_post
+        if process_type=='raw':
+            txt_file_post='/RAW.txt'
+            EXP_FOLDER= exp_folder+'chr{}/exp_raw/'.format(j)+TISSUE[tissue]+txt_file_post
+        if process_type=='unnorm_rm':
+            txt_file_post='/UNNORM_RM.txt'
+            EXP_FOLDER= exp_folder+'chr{}/exp_unnor_rbe/'.format(j)+TISSUE[tissue]+txt_file_post
+    #in avg_0
         exp_folder_dir_list.append(EXP_FOLDER)
     if os.name!='nt':#combine chrs of expression,
         exp_table=pd.concat([ pd.read_csv(exp_folder_dir_list[j],index_col=0,sep='\t',engine='python') for j in range(len(chrom))])
@@ -81,15 +90,17 @@ def fit(model,data_x,data_y,val_x,val_y,test_x,test_y,lr=0.001,maxepochs=100,\
     val_x,val_y=val_x.to(device),val_y.to(device)
     test_x,test_y=test_x.to(device),test_y.to(device)
     for i in range( maxepochs):
-        optimizer.zero_grad()
-        x,y=data_x.to(device),data_y.to(device)
-        ypred=model(x)
-        if ypred.dim()==2:
-            ypred=ypred.squeeze(1)
-        assert ypred.size()==y.size()
-        loss =MSELoss(reduction='mean')(ypred,y)
-        loss.backward()
-        optimizer.step() 
+        indices=torch.randperm(data_x.size()[0] ).split(int( data_x.size()[0]/3) )
+        for batch in range(3):
+            optimizer.zero_grad()
+            x,y=data_x[indices[batch]].to(device),data_y[indices[batch]].to(device)
+            ypred=model(x)
+            if ypred.dim()==2:
+                ypred=ypred.squeeze(1)
+            assert ypred.size()==y.size()
+            loss =MSELoss(reduction='mean')(ypred,y)
+            loss.backward()
+            optimizer.step() 
         model=model.eval()
         val_ypred=model(val_x)
         if val_ypred.dim()==2:
@@ -102,14 +113,17 @@ def fit(model,data_x,data_y,val_x,val_y,test_x,test_y,lr=0.001,maxepochs=100,\
         test_cor_list.append( cor(test_y.cpu().data.numpy(),test_ypred.cpu().data.numpy())[0] ) 
         model=model.train()
         if debug==1 and maxepochs>1:
-            print({'val_cor':val_cor_list[-1],'test_cor':test_cor_list[-1]})
+            print({'val_cor':val_cor_list[-1],'valR2':val_cor_list[-1]**2,\
+                   'test_cor':test_cor_list[-1],'testR2':test_cor_list[-1]**2})
          
-        if len(val_cor_list)>5 and val_cor_list[-1]>0 and val_cor_list>0  \
-        and val_cor_list[-2]>val_cor_list[-1] and val_cor_list[-3]>val_cor_list[-2]  :
+        if len(val_cor_list)>10 and val_cor_list[-1]>0  \
+        and val_cor_list[-2]>1.02*val_cor_list[-1] and val_cor_list[-3]>1.02*val_cor_list[-2] \
+        and val_cor_list[-4]>val_cor_list[-3]  :
             print('converged!')
             break
     print('finally')
-    print(val_cor_list[-1],test_cor_list[-1])
+    print({'val_cor':val_cor_list[-1],'valR2':val_cor_list[-1]**2,\
+                   'test_cor':test_cor_list[-1],'testR2':test_cor_list[-1]**2})
     return val_cor_list[-1],test_cor_list[-1]
 
 def cv(data_x,data_y):

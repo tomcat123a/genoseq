@@ -18,10 +18,14 @@ Parser=argparse.ArgumentParser()
 Parser.add_argument("--gene_idx", type=int,default=0,help='which gene')
 Parser.add_argument("--seed", type=int,default=2,help='seed of split')
 Parser.add_argument("--dnn",type=int,default=1,help='1 linear, other, second last layer')
-Parser.add_argument("--epochs",type=int,default=1000,help='epoch =5 for testing')
+Parser.add_argument("--epochs",type=int,default=300,help='epoch =5 for testing')
+Parser.add_argument("--expr_type",type=int,default=0,help='0 norm_rm, 1 raw, 2 unnorm_rm')
+Parser.add_argument("--cnn_layer",type=int,default=1,help='1 layer 2 layers')
+
 
 parser=Parser.parse_args()
-filename='gene_{}_seed_{}_dnn_{}'.format(parser.gene_idx,parser.seed,parser.dnn)
+filename='gene_{}_sed_{}_dnn_{}_ety{}_cl{}'.format(parser.gene_idx,\
+   parser.seed,parser.dnn,parser.expr_type,parser.cnn_layer)
 
 '''
 #os.chdir('C:/Users/Administrator/Desktop/QTLnet/')
@@ -49,8 +53,13 @@ d=d.iloc[:,np.argsort(d.columns)]
 #cis=pickle.load(file)
 #file.close()
 n_bins=d.shape[0]
-m5=CnnDnn(in_channel=4,out_channel=4,custom=False,dnn=[n_bins,1] if parser.dnn==1 else [n_bins,parser.dnn,1])
-
+if parser.cnn_layer==1:
+    m5=CnnDnn(in_channel=4,out_channel=4,custom=False,dnn=[n_bins,1] if parser.dnn==1 else [n_bins,parser.dnn,1])
+if parser.cnn_layer>1:
+    _n=parser.cnn_layer
+    m5=CnnDnn(in_channel=[4]*_n,out_channel=[4]*_n,cnn_ker=[3]*_n,cnn_stride=[1]*_n,\
+            pool_stride=[2]*_n,pool_ker=[3]*_n,custom=False,\
+   dnn=[n_bins,1] if parser.dnn==1 else [n_bins,parser.dnn,1])
 '''
 m6=CnnDnn(in_channel=[4,4],out_channel=[4,4],cnn_ker=[3,3],\
           cnn_stride=[1,1],\
@@ -59,7 +68,8 @@ m6=CnnDnn(in_channel=[4,4],out_channel=[4,4],cnn_ker=[3,3],\
  
 tab=load_expression(tissue=2,\
    exp_folder='C:/Users/Administrator/Desktop/QTLnet/data/full_expr/'\
-   if os.name=='nt' else '/scratch/deepnet/dna/full_expr/')
+   if os.name=='nt' else '/scratch/deepnet/dna/full_expr/',process_type=\
+   ['norm_rm','raw','unnorm_rm'][parser.expr_type])
 tab=tab.iloc[ :,np.argsort( tab.columns ) ]
 d=d.iloc[ :,np.argsort( d.columns ) ]
 
@@ -70,6 +80,6 @@ test_x=encode_from_seq(test_x)
 train_y=torch.from_numpy( train_y.values.astype(np.float32) ) 
 val_y=torch.from_numpy( val_y.values.astype(np.float32) ) 
 test_y=torch.from_numpy( test_y.values.astype(np.float32) ) 
-_,cor_=fit(m5,train_x,train_y,val_x,val_y,test_x,test_y,maxepochs=parser.epochs,lr=0.001)
+valcor_,testcor_=fit(m5,train_x,train_y,val_x,val_y,test_x,test_y,maxepochs=parser.epochs,lr=0.001)
  
-pd.DataFrame([cor_]).to_csv('../result/'+filename+'.csv')
+pd.DataFrame([{'valcor':valcor_,'testcor':testcor_}]).to_csv('../result/'+filename+'.csv')
